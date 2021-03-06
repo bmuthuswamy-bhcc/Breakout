@@ -1,5 +1,6 @@
 ﻿/*
  * Breakout game: use a paddle to direct a ball to break a 2D grid of bricks
+ * Original reference: https://github.com/NikolayIT/CSharpConsoleGames
  * 
  * I recommend that you do a simple single screen 2D game like breakout (or tetris) to understand
  * the concepts of C# that we covered in class.
@@ -13,8 +14,8 @@
  * Using a FUNCTIONAL PROGRAMMING approach.
  * 1.  We did discuss that we have three elements (Actors) in our game:
  * Bricks,
- * Ball,
- * Paddle
+ * Paddle,
+ * Ball
  * 
  * 2.  Game world and "engine":  our Console Window, 
  *     keep track of the player's "lives", # of balls, score
@@ -40,6 +41,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace Breakout {
     class Program {
@@ -54,45 +57,175 @@ namespace Breakout {
          *     [==][==][==][==][==][==][==][==][==][==]
          *     [==][==][==][==][==][==][==][==][==][==]
          *     [==][==][==][==][==][==][==][==][==][==]
-         *     [==][==][==][==][==][==][==][==][==][==]           
+         *     [==][==][==][==][==][==][==][==][==][==] 
+         *     
+         * Paddle:
+         * 1.  Visual representation:
+         *        -------
+         * 2.  Underlying actions:
+         *   a.  Ball reflects off paddle (physics engine and ball, not related to the paddle)
+         *   b.  Paddle should be user controllable and move only x direction!
+         *   
+         * Ball:
+         * 1. Visual representation: @
+         * 2. Underlying actions + 
+         * data structure for the ball path (for physics engine, need to keep track of the previous ball 
+         * position.  A natural data structure is a Queue)
          * 
          */
 
+        // Bricks
+        private const int MAX_WIDTH = 40;
         private const int NUM_COLS = 10;
         private const int NUM_ROWS = 4;
         private static bool[,] bricks = new bool[NUM_ROWS, NUM_COLS];
         
-        /* @TODO(Bharath):  we need to dynamically update the bricks as the
+        private static int paddleSize = 7;
+        private static int paddleX = 7; // starting position of the paddle
+
+        private static int ballX = 10; // starting (x,y) coordinates of the ball
+        private static int ballY = 15;
+        private static int ballDirectionX = -1;
+        private static int ballDirectionY = 1;
+
+        private static bool GameOver = false;
+           
+
+        static Queue<int[]> currentBallPosition = new Queue<int[]>(); // store array of (x,y)
+
+        private static void DrawCharacterAtPosition(char symbol, int x, int y) {
+            Console.SetCursorPosition(x, y);
+            Console.Write(symbol);
+        }
+
+        private static void DrawBall() {
+            DrawCharacterAtPosition('@', ballX, ballY);
+            currentBallPosition.Enqueue(new int[] { ballX, ballY });
+        }
+
+        private static void RemoveBall() {
+            // need to make sure that the ballPath Queue is not empty!
+            int[] ballPosition;
+            while (currentBallPosition.Count > 0) {
+                ballPosition = currentBallPosition.Dequeue();
+                DrawCharacterAtPosition(' ', ballPosition[0], ballPosition[1]);
+            }
+        }
+
+        private static void PhysicsEngine() {
+            ballX += ballDirectionX;
+            ballY += ballDirectionY;
+            // Collision detection
+            // Bricks @TODO(students):  finish this as part of your final project
+
+            // top
+            if (ballY == 0) {
+                ballDirectionY = 1;
+            }
+
+            // sides. @TODO(students):  resolve the bug with the right side of the screen
+            if ((ballX == MAX_WIDTH) || (ballX == 0)) {
+                ballDirectionX *= -1;
+            }
+            // paddle: 
+            if (ballY >= Console.WindowHeight - 10) { // ball is at paddle y coordinate
+                // has the ball actually hit the paddle?
+                if ((paddleX <= ballX) && (paddleX + paddleSize >= ballX)) {
+                    ballDirectionY *= -1;
+                }
+                else {
+                    GameOver = true;
+                }
+            }
+        }
+        
+        private static void DrawPaddle() {
+            for(int x = paddleX; x < paddleX + paddleSize;x++) {
+                DrawCharacterAtPosition('-', x, Console.WindowHeight - 10);
+            }
+        }
+
+        private static void RemovePaddle() {
+            for (int x = paddleX; x < paddleX + paddleSize; x++) {
+                DrawCharacterAtPosition(' ', x, Console.WindowHeight - 10);
+            }
+        }
+
+        private static void PaddleLeft() {
+            if (paddleX > 0) {
+                paddleX--;
+            }
+        }
+
+        private static void PaddleRight() {
+            /*
+             * paddleX is the x coordinate of the first character in your paddle:
+             * paddleX -> '-'------
+             */
+            if (paddleX < MAX_WIDTH - paddleSize) {
+                paddleX++;
+            }
+        }
+
+
+        /* @TODO(students):  we need to dynamically update the bricks as the
          * ball collides with them.  For now, we will just statically draw them and
          * then workout the algorithm for dynamic update
          */
         private static void DrawBricks() {
-            for (int row = 0; row < NUM_ROWS; row++) {
-                for (int col = 0; col < NUM_COLS; col++) {
-                    bricks[row, col] = true;
-                    if (bricks[row, col]) {
-                        Console.Write("[==]");
-                    }                   
+            for (int y = 0; y < NUM_ROWS; y++) {
+                for (int x = 0; x < NUM_COLS; x++) {
+                    bricks[y, x] = true;
+                    // @TODO(students):  Need to replace Write below with DrawCharacterAtPosition                   
+                    Console.Write("[==]");
                 } // NUM_COLS
                 Console.WriteLine();
-            } // NUM_ROWS
+            } // NUM_ROWS           
         }
         private static void SetupGamingGrid() {
             /* GamingGrid will have the actual play area
              * and status (player lives, # of balls left, score)
+             * @TODO(students):  Finish setting up the GamingGrid as 
+             * part of your final project solution
              * 
              */
             Console.Title = "[[[Breakout BHCC CSC 287 Spring 2021]]]";
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"Foreground color is: {Console.ForegroundColor}");
+            Console.WindowWidth = MAX_WIDTH;
+            Console.BufferWidth = MAX_WIDTH;
+            Console.CursorVisible = false;
+            Console.ForegroundColor = ConsoleColor.Yellow;            
         }
         private static void Initialize() {
             Program.SetupGamingGrid();
             Program.DrawBricks();
-        }
+            Program.DrawPaddle();
+            Program.DrawBall();
+        }        
+
         static void Main(string[] args) {
             Program.Initialize();
-            Console.ReadKey(true);
+
+            // Gaming loop
+            while(!GameOver) {
+                if (Console.KeyAvailable) {
+                    ConsoleKeyInfo keyInfo = Console.ReadKey();
+                    if (keyInfo.Key == ConsoleKey.Q) {
+                        break;
+                    }
+                    RemovePaddle();                    
+                    if (keyInfo.Key == ConsoleKey.LeftArrow) {                        
+                        PaddleLeft();
+                    }
+                    if (keyInfo.Key == ConsoleKey.RightArrow) {
+                        PaddleRight();
+                    }
+                    DrawPaddle();
+                }
+                RemoveBall();
+                PhysicsEngine(); // @TODO(Bharath):  Move this into a separate thread for proper Console refresh
+                DrawBall();
+                Thread.Sleep(500); 
+            }
         }
     }
 }
